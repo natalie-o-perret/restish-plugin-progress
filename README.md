@@ -49,7 +49,7 @@ Select the formatter with `-o progress`. For an SSE or NDJSON endpoint whose
 events already use the plugin's JSON contract:
 
 ```sh
-restish example events --rsh-print b -o progress
+restish example events --rsh-print bc -o progress
 ```
 
 Use a Restish filter to map another event shape into the contract before
@@ -58,33 +58,39 @@ formatting it:
 ```sh
 restish example events \
   -f 'body.data | {id, label, state, current, total, message}' \
-  --rsh-print b \
+  --rsh-print bc \
   -o progress
 ```
 
+Use `--rsh-print b` instead when redirecting output and ANSI colours are not
+wanted.
+
 ## Customise
 
-The defaults use a cyan 24-character Unicode bar. Environment variables can
-change the style without changing event payloads:
+The defaults use a 24-character Unicode bar with a red-to-pink gradient.
+Environment variables can change the style without changing event payloads:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `RSH_PROGRESS_WIDTH` | `24` | Bar width from 1 to 200 |
-| `RSH_PROGRESS_COLOR` | `cyan` | Filled-bar colour |
+| `RSH_PROGRESS_COLOR` | empty | Solid colour overriding both gradient endpoints |
+| `RSH_PROGRESS_COLOR_START` | `#ff3b30` | Gradient start colour |
+| `RSH_PROGRESS_COLOR_END` | `#ff2d95` | Gradient end colour |
 | `RSH_PROGRESS_FILL` | `█` | Filled character |
 | `RSH_PROGRESS_HEAD` | `█` | Leading character |
 | `RSH_PROGRESS_EMPTY` | `░` | Empty character |
 | `RSH_PROGRESS_START` | empty | Bar prefix |
 | `RSH_PROGRESS_END` | empty | Bar suffix |
 
-Colours may be `black`, `blue`, `cyan`, `green`, `magenta`, `red`, `white`,
-or `yellow`. Restish disables colours automatically for redirected output.
+Colours may use `#RRGGBB` or `black`, `blue`, `cyan`, `green`, `magenta`,
+`red`, `white`, or `yellow`. The `c` in `--rsh-print bc` enables colour.
 
 ```sh
 RSH_PROGRESS_WIDTH=32 \
-RSH_PROGRESS_COLOR=magenta \
+RSH_PROGRESS_COLOR_START='#7c3aed' \
+RSH_PROGRESS_COLOR_END='#22d3ee' \
 RSH_PROGRESS_FILL='━' \
 RSH_PROGRESS_HEAD='╺' \
 RSH_PROGRESS_EMPTY='─' \
-restish example events --rsh-print b -o progress
+restish example events --rsh-print bc -o progress
 ```

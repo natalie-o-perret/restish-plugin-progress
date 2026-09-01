@@ -13,18 +13,34 @@ import (
 )
 
 type barStyle struct {
-	Width int
-	Color string
-	Fill  string
-	Head  string
-	Empty string
-	Start string
-	End   string
+	Width      int
+	ColorStart rgb
+	ColorEnd   rgb
+	Fill       string
+	Head       string
+	Empty      string
+	Start      string
+	End        string
 }
 
 func defaultBarStyle() barStyle {
-	return barStyle{Width: 24, Color: "cyan", Fill: "█", Head: "█", Empty: "░"}
+	return barStyle{
+		Width:      24,
+		ColorStart: rgb{R: 255, G: 59, B: 48},
+		ColorEnd:   rgb{R: 255, G: 45, B: 149},
+		Fill:       "█",
+		Head:       "█",
+		Empty:      "░",
+	}
 }
+
+type rgb struct{ R, G, B uint8 }
+
+const (
+	fillMarker  = "\ue000"
+	headMarker  = "\ue001"
+	emptyMarker = "\ue002"
+)
 
 type progress struct {
 	ID      string `json:"id"`
@@ -168,21 +184,16 @@ func render(p progress, style barStyle, color bool) (string, error) {
 		return progressDescription(p), nil
 	}
 	theme := progressbar.Theme{
-		Saucer:        style.Fill,
-		SaucerHead:    style.Head,
-		SaucerPadding: style.Empty,
+		Saucer:        fillMarker,
+		SaucerHead:    headMarker,
+		SaucerPadding: emptyMarker,
 		BarStart:      style.Start,
 		BarEnd:        style.End,
-	}
-	if color {
-		theme.Saucer = "[" + style.Color + "]" + theme.Saucer + "[reset]"
-		theme.SaucerHead = "[" + style.Color + "]" + theme.SaucerHead + "[reset]"
 	}
 	bar := progressbar.NewOptions64(*p.Total,
 		progressbar.OptionSetWriter(io.Discard),
 		progressbar.OptionSetWidth(style.Width),
 		progressbar.OptionSetTheme(theme),
-		progressbar.OptionEnableColorCodes(color),
 		progressbar.OptionSetPredictTime(false),
 		progressbar.OptionSetElapsedTime(false),
 		progressbar.OptionShowDescriptionAtLineEnd(),
@@ -191,7 +202,50 @@ func render(p progress, style barStyle, color bool) (string, error) {
 	if err := bar.Set64(*p.Current); err != nil {
 		return "", fmt.Errorf("render progress: %w", err)
 	}
-	return strings.TrimSpace(strings.TrimPrefix(bar.String(), "\r")), nil
+	line := strings.TrimSpace(strings.TrimPrefix(bar.String(), "\r"))
+	return renderBarCells(line, style, color), nil
+}
+
+func renderBarCells(line string, style barStyle, color bool) string {
+	var out strings.Builder
+	position := 0
+	for _, cell := range line {
+		switch string(cell) {
+		case fillMarker, headMarker:
+			glyph := style.Fill
+			if string(cell) == headMarker {
+				glyph = style.Head
+			}
+			if color {
+				c := gradientColor(style.ColorStart, style.ColorEnd, position, style.Width)
+				fmt.Fprintf(&out, "\x1b[38;2;%d;%d;%dm%s\x1b[0m", c.R, c.G, c.B, glyph)
+			} else {
+				out.WriteString(glyph)
+			}
+			position++
+		case emptyMarker:
+			out.WriteString(style.Empty)
+			position++
+		default:
+			out.WriteRune(cell)
+		}
+	}
+	return out.String()
+}
+
+func gradientColor(start, end rgb, position, width int) rgb {
+	if width <= 1 {
+		return start
+	}
+	position = max(0, min(position, width-1))
+	interpolate := func(a, b uint8) uint8 {
+		return uint8((int(a)*(width-1-position) + int(b)*position) / (width - 1))
+	}
+	return rgb{
+		R: interpolate(start.R, end.R),
+		G: interpolate(start.G, end.G),
+		B: interpolate(start.B, end.B),
+	}
 }
 
 func progressDescription(p progress) string {
@@ -232,10 +286,23 @@ func barStyleFromEnv() (barStyle, error) {
 		}
 	}
 	if color := os.Getenv("RSH_PROGRESS_COLOR"); color != "" {
-		if !validColor(color) {
-			return barStyle{}, fmt.Errorf("RSH_PROGRESS_COLOR must be black, blue, cyan, green, magenta, red, white, or yellow")
+		parsed, err := parseColor(color)
+		if err != nil {
+			return barStyle{}, fmt.Errorf("RSH_PROGRESS_COLOR: %w", err)
 		}
-		style.Color = color
+		style.ColorStart, style.ColorEnd = parsed, parsed
+	}
+	for name, target := range map[string]*rgb{
+		"RSH_PROGRESS_COLOR_START": &style.ColorStart,
+		"RSH_PROGRESS_COLOR_END":   &style.ColorEnd,
+	} {
+		if value := os.Getenv(name); value != "" {
+			parsed, err := parseColor(value)
+			if err != nil {
+				return barStyle{}, fmt.Errorf("%s: %w", name, err)
+			}
+			*target = parsed
+		}
 	}
 	if style.Fill == "" || style.Head == "" || style.Empty == "" {
 		return barStyle{}, fmt.Errorf("RSH_PROGRESS_FILL, RSH_PROGRESS_HEAD, and RSH_PROGRESS_EMPTY cannot be empty")
@@ -243,13 +310,27 @@ func barStyleFromEnv() (barStyle, error) {
 	return style, nil
 }
 
-func validColor(color string) bool {
-	switch color {
-	case "black", "blue", "cyan", "green", "magenta", "red", "white", "yellow":
-		return true
-	default:
-		return false
+func parseColor(value string) (rgb, error) {
+	colors := map[string]rgb{
+		"black":   {},
+		"blue":    {B: 255},
+		"cyan":    {G: 255, B: 255},
+		"green":   {G: 255},
+		"magenta": {R: 255, B: 255},
+		"red":     {R: 255},
+		"white":   {R: 255, G: 255, B: 255},
+		"yellow":  {R: 255, G: 255},
 	}
+	if color, ok := colors[strings.ToLower(value)]; ok {
+		return color, nil
+	}
+	if len(value) == 7 && value[0] == '#' {
+		n, err := strconv.ParseUint(value[1:], 16, 24)
+		if err == nil {
+			return rgb{R: uint8(n >> 16), G: uint8(n >> 8), B: uint8(n)}, nil
+		}
+	}
+	return rgb{}, fmt.Errorf("must be a basic colour name or #RRGGBB")
 }
 
 func terminalState(state string) bool {

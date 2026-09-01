@@ -75,6 +75,9 @@ func TestBarStyleFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if style.ColorStart != (rgb{R: 255, B: 255}) || style.ColorEnd != (rgb{R: 255, B: 255}) {
+		t.Fatalf("solid colour = %#v -> %#v", style.ColorStart, style.ColorEnd)
+	}
 	current, total := int64(1), int64(2)
 	got, err := render(progress{Label: "work", State: "running", Current: &current, Total: &total}, style, false)
 	if err != nil {
@@ -93,12 +96,32 @@ func TestBarStyleFromEnvRejectsInvalidWidth(t *testing.T) {
 }
 
 func TestRenderUsesANSIColourWhenEnabled(t *testing.T) {
-	current, total := int64(1), int64(2)
+	current, total := int64(2), int64(2)
 	got, err := render(progress{Label: "work", State: "running", Current: &current, Total: &total}, defaultBarStyle(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got, "\x1b[") {
-		t.Fatalf("render() = %q, want ANSI colour", got)
+	for _, code := range []string{"\x1b[38;2;255;59;48m", "\x1b[38;2;255;45;149m"} {
+		if !strings.Contains(got, code) {
+			t.Fatalf("render() = %q, want gradient colour %q", got, code)
+		}
+	}
+}
+
+func TestGradientColor(t *testing.T) {
+	start := rgb{R: 255}
+	end := rgb{R: 255, B: 200}
+	if got, want := gradientColor(start, end, 2, 5), (rgb{R: 255, B: 100}); got != want {
+		t.Fatalf("gradientColor() = %#v, want %#v", got, want)
+	}
+}
+
+func TestParseColor(t *testing.T) {
+	got, err := parseColor("#ff2d95")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (rgb{R: 255, G: 45, B: 149}); got != want {
+		t.Fatalf("parseColor() = %#v, want %#v", got, want)
 	}
 }
