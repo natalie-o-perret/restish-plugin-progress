@@ -10,7 +10,7 @@ import (
 
 func TestFormatterStreamsProgress(t *testing.T) {
 	var out bytes.Buffer
-	f := &formatter{w: &out}
+	f := &formatter{w: &out, style: defaultBarStyle()}
 	for _, body := range []any{
 		map[string]any{"id": "deploy", "current": 1, "total": 2, "message": "first"},
 		map[string]any{"id": "deploy", "current": 1, "total": 2, "message": "first"},
@@ -20,8 +20,8 @@ func TestFormatterStreamsProgress(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	want := "deploy [##########----------] 50% (1/2 steps) running: first\n" +
-		"deploy [####################] 100% (2/2 steps) success\n"
+	want := "50% ████████████░░░░░░░░░░░░  deploy  1/2 steps  running: first\n" +
+		"100% ████████████████████████  deploy  2/2 steps  success\n"
 	if got := out.String(); got != want {
 		t.Fatalf("output = %q, want %q", got, want)
 	}
@@ -29,15 +29,19 @@ func TestFormatterStreamsProgress(t *testing.T) {
 
 func TestRenderUsesSingularStep(t *testing.T) {
 	current, total := int64(1), int64(1)
-	want := "workflow [####################] 100% (1/1 step) success"
-	if got := render(progress{Label: "workflow", State: "success", Current: &current, Total: &total}); got != want {
+	want := "100% ████████████████████████  workflow  1/1 step  success"
+	got, err := render(progress{Label: "workflow", State: "success", Current: &current, Total: &total}, defaultBarStyle(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
 		t.Fatalf("render() = %q, want %q", got, want)
 	}
 }
 
 func TestFormatterRedrawsTTYLine(t *testing.T) {
 	var out bytes.Buffer
-	f := &formatter{w: &out}
+	f := &formatter{w: &out, style: defaultBarStyle()}
 	if err := f.Handle(plugin.FormatterRequest{Event: "start", Color: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +51,7 @@ func TestFormatterRedrawsTTYLine(t *testing.T) {
 	if err := f.Handle(plugin.FormatterRequest{Event: "end"}); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := out.String(), "\r\x1b[2Kworkflow running\n"; got != want {
+	if got, want := out.String(), "\r\x1b[2Kworkflow  running\n"; got != want {
 		t.Fatalf("output = %q, want %q", got, want)
 	}
 }
@@ -56,5 +60,45 @@ func TestDecodeProgressRejectsIncompleteCount(t *testing.T) {
 	_, err := decodeProgress(map[string]any{"label": "workflow", "current": 1})
 	if err == nil || !strings.Contains(err.Error(), "current and total together") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestBarStyleFromEnv(t *testing.T) {
+	t.Setenv("RSH_PROGRESS_WIDTH", "4")
+	t.Setenv("RSH_PROGRESS_COLOR", "magenta")
+	t.Setenv("RSH_PROGRESS_FILL", "=")
+	t.Setenv("RSH_PROGRESS_HEAD", ">")
+	t.Setenv("RSH_PROGRESS_EMPTY", ".")
+	t.Setenv("RSH_PROGRESS_START", "[")
+	t.Setenv("RSH_PROGRESS_END", "]")
+	style, err := barStyleFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, total := int64(1), int64(2)
+	got, err := render(progress{Label: "work", State: "running", Current: &current, Total: &total}, style, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "50% [=>..]  work  1/2 steps  running"; got != want {
+		t.Fatalf("render() = %q, want %q", got, want)
+	}
+}
+
+func TestBarStyleFromEnvRejectsInvalidWidth(t *testing.T) {
+	t.Setenv("RSH_PROGRESS_WIDTH", "wide")
+	if _, err := barStyleFromEnv(); err == nil {
+		t.Fatal("expected invalid width error")
+	}
+}
+
+func TestRenderUsesANSIColourWhenEnabled(t *testing.T) {
+	current, total := int64(1), int64(2)
+	got, err := render(progress{Label: "work", State: "running", Current: &current, Total: &total}, defaultBarStyle(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "\x1b[") {
+		t.Fatalf("render() = %q, want ANSI colour", got)
 	}
 }

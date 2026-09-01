@@ -30,8 +30,11 @@ formatting. Redirected or colour-disabled output uses one line per changed
 record, which remains readable in logs and pipes.
 
 ```text
-Deploy instances [#############-------] 66% (2/3 steps) running: applying changes
+66% ████████████████░░░░░░░░  Deploy instances  2/3 steps  running: applying changes
 ```
+
+The visual bar is rendered by
+[`schollz/progressbar`](https://github.com/schollz/progressbar).
 
 ## Build And Install
 
@@ -57,4 +60,31 @@ restish example events \
   -f 'body.data | {id, label, state, current, total, message}' \
   --rsh-print b \
   -o progress
+```
+
+## Customise
+
+The defaults use a cyan 24-character Unicode bar. Environment variables can
+change the style without changing event payloads:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RSH_PROGRESS_WIDTH` | `24` | Bar width from 1 to 200 |
+| `RSH_PROGRESS_COLOR` | `cyan` | Filled-bar colour |
+| `RSH_PROGRESS_FILL` | `█` | Filled character |
+| `RSH_PROGRESS_HEAD` | `█` | Leading character |
+| `RSH_PROGRESS_EMPTY` | `░` | Empty character |
+| `RSH_PROGRESS_START` | empty | Bar prefix |
+| `RSH_PROGRESS_END` | empty | Bar suffix |
+
+Colours may be `black`, `blue`, `cyan`, `green`, `magenta`, `red`, `white`,
+or `yellow`. Restish disables colours automatically for redirected output.
+
+```sh
+RSH_PROGRESS_WIDTH=32 \
+RSH_PROGRESS_COLOR=magenta \
+RSH_PROGRESS_FILL='━' \
+RSH_PROGRESS_HEAD='╺' \
+RSH_PROGRESS_EMPTY='─' \
+restish example events --rsh-print b -o progress
 ```
