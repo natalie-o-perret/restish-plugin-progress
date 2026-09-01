@@ -7,7 +7,9 @@
 `restish-plugin-progress` adds a streaming `progress` output formatter to
 [Restish](https://rest.sh/).
 
-Each input item is an object with this shape:
+SSE and NDJSON define how records are transported, but neither defines a
+standard progress payload. This plugin uses the following small JSON contract
+for each input item:
 
 ```json
 {
@@ -41,7 +43,7 @@ restish plugin install ./restish-progress --yes
 ## Use
 
 Select the formatter with `-o progress`. For an SSE or NDJSON endpoint whose
-events already use the progress record shape:
+events already use the plugin's JSON contract:
 
 ```sh
 restish example events --rsh-print b -o progress
