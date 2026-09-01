@@ -39,6 +39,18 @@ func TestRenderUsesSingularStep(t *testing.T) {
 	}
 }
 
+func TestRenderUsesCustomUnit(t *testing.T) {
+	current, total := int64(512), int64(1024)
+	want := "50% ████████████░░░░░░░░░░░░  Download  512/1024 bytes  running"
+	got, err := render(progress{Label: "Download", State: "running", Current: &current, Total: &total, Unit: "bytes"}, defaultBarStyle(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("render() = %q, want %q", got, want)
+	}
+}
+
 func TestFormatterRedrawsTTYLine(t *testing.T) {
 	var out bytes.Buffer
 	f := &formatter{w: &out, style: defaultBarStyle()}

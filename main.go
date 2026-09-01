@@ -48,6 +48,7 @@ type progress struct {
 	State   string `json:"state"`
 	Current *int64 `json:"current"`
 	Total   *int64 `json:"total"`
+	Unit    string `json:"unit"`
 	Message string `json:"message"`
 }
 
@@ -251,9 +252,12 @@ func gradientColor(start, end rgb, position, width int) rgb {
 func progressDescription(p progress) string {
 	parts := []string{p.Label}
 	if p.Total != nil {
-		unit := "steps"
-		if *p.Total == 1 {
-			unit = "step"
+		unit := p.Unit
+		if unit == "" {
+			unit = "steps"
+			if *p.Total == 1 {
+				unit = "step"
+			}
 		}
 		parts = append(parts, fmt.Sprintf("%d/%d %s", *p.Current, *p.Total, unit))
 	}

@@ -18,12 +18,14 @@ for each input item:
   "state": "running",
   "current": 3,
   "total": 5,
+  "unit": "steps",
   "message": "starting instance 4"
 }
 ```
 
 `label` falls back to `id`. `state` defaults to `running`. `current` and
-`total` are optional, but must be supplied together.
+`total` are optional, but must be supplied together. `unit` defaults to
+`steps`.
 
 The formatter redraws one terminal line when Restish enables terminal
 formatting. Redirected or colour-disabled output uses one line per changed
